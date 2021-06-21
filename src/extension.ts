@@ -1,14 +1,19 @@
 import * as vscode from 'vscode';
 import * as os from 'os';
 import * as path from 'path';
+import * as fs from 'fs';
 import {WebDav} from './webdavUtils';
 import {FileStat} from 'webdav';
 
-const WEBDAV_URL = "http://c102-167.cloud.gwdg.de/webdav";
-const WEBDAV_USER = "zfrsoz";
-const WEBDAV_PASSWD = "coping-lifeboat-unimodal-synoptic";
-const GROBID_IN_DIR = "GROBID-IN";
-const GROBID_OUT_DIR = "GROBID-OUT";
+import * as dotenv from 'dotenv';
+
+const { 
+	WEBDAV_URL, 
+	WEBDAV_USER, 
+	WEBDAV_PASSWD, 
+	GROBID_IN_DIR, 
+	GROBID_OUT_DIR 
+} = dotenv.parse(fs.readFileSync(path.join(__dirname, "..", ".env"), "utf-8"));
 
 async function openTrainingFiles() {
 	try {
