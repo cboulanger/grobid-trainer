@@ -10,14 +10,19 @@
 		"Other"
 	],
 	"activationEvents": [
-		"onCommand:grobid-trainer.openTrainingFiles"
+		"onCommand:grobid-trainer.openTrainingFiles",
+		"onCommand:grobid-trainer.createTrainingFiles"
 	],
 	"main": "./out/extension.js",
 	"contributes": {
 		"commands": [
 			{
+				"command": "grobid-trainer.createTrainingFiles",
+				"title": "Create GROBID training files from PDF documents"
+			},
+			{
 				"command": "grobid-trainer.openTrainingFiles",
-				"title": "Given a DOI, open GROBID training files"
+				"title": "Select and edit GROBID training files"
 			}
 		]
 	},
@@ -33,6 +38,7 @@
 		"@types/glob": "^7.1.3",
 		"@types/mocha": "^8.2.2",
 		"@types/node": "14.x",
+		"@types/ssh2": "^0.5.46",
 		"@types/vscode": "^1.57.0",
 		"@typescript-eslint/eslint-plugin": "^4.26.0",
 		"@typescript-eslint/parser": "^4.26.0",
@@ -44,6 +50,7 @@
 	},
 	"dependencies": {
 		"dotenv": "^10.0.0",
+		"ssh2": "^1.1.0",
 		"webdav": "^4.6.0"
 	}
 }
