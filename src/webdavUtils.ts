@@ -29,7 +29,7 @@ export class WebDav {
         .createReadStream(fileName)
         .on('error', reject)
         .pipe(fs.createWriteStream(targetPath))
-        .on('finish', async () =>  {
+        .on('close', async () =>  {
           try {
             await removeXattr(targetPath, "com.apple.quarantine");
           } catch(e) {

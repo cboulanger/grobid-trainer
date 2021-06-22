@@ -171,8 +171,7 @@ async function openTrainingFiles() {
 		};
 		const item = await vscode.window.showQuickPick(items);
 		if (item) {
-			vscode.commands.executeCommand('workbench.action.closeAllEditors');
-
+			await vscode.commands.executeCommand('workbench.action.closeAllEditors');
 			const xmlPath = path.join(GROBID_OUT_DIR,item.model.filename);
 			const tmpXml = path.join(os.tmpdir(), item.model.filename);
 			const corrXml = path.join(GROBID_CORRECTED_DIR, item.model.filename);
@@ -185,12 +184,10 @@ async function openTrainingFiles() {
 					vscode.window.showInformationMessage("Document was uploaded to server.");
 				}
 			});
-			
 			const pdfPath = path.join(GROBID_IN_DIR, item.model.doi.replace("/","_") + ".pdf");
 			const tmpPdf = path.join(os.tmpdir(), path.basename(pdfPath));
 			await wd.download(pdfPath, tmpPdf);
-			vscode.commands.executeCommand("vscode.openWith", vscode.Uri.file(tmpPdf), "pdf.preview",vscode.ViewColumn.Beside);
-			
+			await vscode.commands.executeCommand("vscode.openWith", vscode.Uri.file(tmpPdf), "pdf.preview",vscode.ViewColumn.Beside);
 		}
 	} catch (ex) {
 		console.error(ex);
