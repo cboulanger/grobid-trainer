@@ -11,7 +11,7 @@ import { resolve } from 'path';
 
 const { 
 	WEBDAV_URL, WEBDAV_USER, WEBDAV_PASSWD, 
-	GROBID_SRC_DIR, GROBID_IN_DIR, GROBID_OUT_DIR,
+	GROBID_SRC_DIR, GROBID_IN_DIR, GROBID_OUT_DIR, GROBID_VERSION,
 	SSH_HOST, SSH_PORT, SSH_USER, SSH_KEY_FILE
 } = dotenv.parse(fs.readFileSync(path.join(__dirname, "..", ".env"), "utf-8"));
 
@@ -64,6 +64,7 @@ async function sshExec(cmd:string) : Promise<string> {
 				resolve(result);
 			})
 			.on('data', (data: string) => {
+				console.log(data);
 				result += data;
 			})
 			.stderr.on('data', (data) => {
@@ -103,41 +104,32 @@ async function createTrainingFiles() {
 		const quickPickOptions: vscode.QuickPickOptions = {
 			canPickMany: true
 		};
-		let fileModels = await vscode.window.showQuickPick(items, quickPickOptions);
+		let fileModels: any = await vscode.window.showQuickPick(items, quickPickOptions);
 		if (!fileModels) {
 			return;
 		}
 		// import { ExtensionContext, StatusBarAlignment, window, StatusBarItem, Selection, workspace, TextEditor, commands, ProgressLocation } from 'vscode';
 		vscode.window.withProgress({
 			location: vscode.ProgressLocation.Notification,
-			title: "I am long running!",
+			title: "Creating traininng files...",
 			cancellable: true
-		}, (progress, token) => {
+		}, async (progress, token) => {
+			let cancel = false;
 			token.onCancellationRequested(() => {
-				console.log("User canceled the long running operation");
+				cancel = true;
 			});
-
 			progress.report({ increment: 0 });
+			for (const fileModel of fileModels ) {
+				if (cancel) {
+					progress.report({ increment: 0 });
+					break;
+				}
+				progress.report({ increment: Math.round(100/fileModels.lenth), message: `Creating training files for ${fileModel.doi}` });
+				
+				await sshExec(`java -Xmx4G -jar ./grobid/grobid-core/build/libs/grobid-core-${GROBID_VERSION}-onejar.jar ` +
+					`-gH ./grobid/grobid-home -dIn /var/webdav/GROBID-IN -dOut /var/webdav/GROBID-OUT -exe createTraining`);
+			}
 
-			setTimeout(() => {
-				progress.report({ increment: 10, message: "I am long running! - still going..." });
-			}, 1000);
-
-			setTimeout(() => {
-				progress.report({ increment: 40, message: "I am long running! - still going even more..." });
-			}, 2000);
-
-			setTimeout(() => {
-				progress.report({ increment: 50, message: "I am long running! - almost there..." });
-			}, 3000);
-
-			const p = new Promise<void>(resolve => {
-				setTimeout(() => {
-					resolve();
-				}, 5000);
-			});
-
-			return p;
 		});
 		
 
