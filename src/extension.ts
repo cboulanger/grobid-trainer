@@ -7,14 +7,17 @@ import * as dotenv from 'dotenv';
 import {WebDav} from './webdavUtils';
 import {FileStat} from 'webdav';
 import { Client } from 'ssh2';
-import { resolve } from 'path';
 
 const { 
-	WEBDAV_URL, WEBDAV_USER, WEBDAV_PASSWD, 
-	GROBID_SRC_DIR, GROBID_IN_DIR, GROBID_OUT_DIR, GROBID_VERSION,
+	WEBDAV_URL, WEBDAV_USER, WEBDAV_PASSWD, WEBDAV_DIR,
+	GROBID_VERSION, GROBID_DIR, GROBID_SRC_DIR, GROBID_IN_DIR, GROBID_OUT_DIR, GROBID_CORRECTED_DIR,
 	SSH_HOST, SSH_PORT, SSH_USER, SSH_KEY_FILE
 } = dotenv.parse(fs.readFileSync(path.join(__dirname, "..", ".env"), "utf-8"));
 
+const GROBID_IN_PATH = path.join(WEBDAV_DIR, GROBID_IN_DIR);
+const GROBID_OUT_PATH = path.join(WEBDAV_DIR, GROBID_OUT_DIR);
+const GROBID_CORE_JAR_PATH = `${GROBID_DIR}/grobid-core/build/libs/grobid-core-${GROBID_VERSION}-onejar.jar`;
+const GROBID_TRAINING_DATA_PATH = `${GROBID_DIR}/grobid-trainer/resources/dataset`;
 interface SourceFileModel {
 	filename: string,
 	doi: string
@@ -52,8 +55,10 @@ async function sshExec(cmd:string) : Promise<string> {
 		sshClient = await getSshClient();
 	}
 	return new Promise((resolve, reject) => {
+		console.log(`Executing ${cmd}:\n`);
 		sshClient.exec(cmd, (err, stream) => {
 			if (err) {
+				console.error(err);
 				reject(err);
 			}
 			let result =""; 
@@ -63,12 +68,14 @@ async function sshExec(cmd:string) : Promise<string> {
 				}
 				resolve(result);
 			})
-			.on('data', (data: string) => {
-				console.log(data);
-				result += data;
+			.on('data', (data: Buffer) => {
+				const text = data.toString("utf8");
+				console.log(text);
+				result += text;
 			})
-			.stderr.on('data', (data) => {
-				reject(data);
+			.stderr.on('data', (data: Buffer) => {
+				const text = data.toString("utf8");
+				console.log(text);
 			});			
 		});
 	});
@@ -104,14 +111,16 @@ async function createTrainingFiles() {
 		const quickPickOptions: vscode.QuickPickOptions = {
 			canPickMany: true
 		};
-		let fileModels: any = await vscode.window.showQuickPick(items, quickPickOptions);
-		if (!fileModels) {
+		let result = (await vscode.window.showQuickPick(items, quickPickOptions)) as unknown; // returns QpModelItem[] | undefined
+		if (!result) {
 			return;
 		}
-		// import { ExtensionContext, StatusBarAlignment, window, StatusBarItem, Selection, workspace, TextEditor, commands, ProgressLocation } from 'vscode';
+		await sshExec(`rm -f ${GROBID_IN_PATH}/*`);
+		await sshExec(`rm -f ${GROBID_OUT_PATH}/*`);
+		let pickedItems = result as QpModelItem[];
 		vscode.window.withProgress({
 			location: vscode.ProgressLocation.Notification,
-			title: "Creating traininng files...",
+			title: "Creating traininng files",
 			cancellable: true
 		}, async (progress, token) => {
 			let cancel = false;
@@ -119,23 +128,24 @@ async function createTrainingFiles() {
 				cancel = true;
 			});
 			progress.report({ increment: 0 });
-			for (const fileModel of fileModels ) {
+			for (const pickedItem of pickedItems) {
 				if (cancel) {
-					progress.report({ increment: 0 });
+					progress.report({ increment: 100, message: "Cancelled" });
 					break;
 				}
-				progress.report({ increment: Math.round(100/fileModels.lenth), message: `Creating training files for ${fileModel.doi}` });
-				
-				await sshExec(`java -Xmx4G -jar ./grobid/grobid-core/build/libs/grobid-core-${GROBID_VERSION}-onejar.jar ` +
-					`-gH ./grobid/grobid-home -dIn /var/webdav/GROBID-IN -dOut /var/webdav/GROBID-OUT -exe createTraining`);
+				let message = pickedItem.model.doi;
+				progress.report({ increment: Math.round(100/pickedItems.length), message});
+				const GROBID_SRC_FILE = path.join(WEBDAV_DIR, GROBID_SRC_DIR, pickedItem.model.filename);
+				const GROBID_TGT_FILE = path.join(GROBID_IN_PATH, pickedItem.model.filename.replace(".pdfa",""));
+				await sshExec(`cp ${GROBID_SRC_FILE} ${GROBID_TGT_FILE}`);
+				const cmd = `java -Xmx4G -jar ${GROBID_CORE_JAR_PATH}`;
+				const params = `-gH ${GROBID_DIR}/grobid-home -dIn ${GROBID_IN_PATH} -dOut ${GROBID_OUT_PATH}`;
+				await sshExec(`${cmd} ${params} -exe createTraining`);
 			}
-
 		});
-		
-
-
 	} catch (ex) {
-		vscode.window.showErrorMessage(ex);
+		console.error(ex);
+		vscode.window.showErrorMessage(ex.message);
 	}
 }
 
@@ -146,7 +156,7 @@ async function openTrainingFiles() {
 			(await getFilenames(GROBID_OUT_DIR, "tei.xml"))
 				.map(filename => ({
 					filename,
-					doi: extract(filename, /^(.+?)\.training/).replace("_","/"),
+					doi: extract(filename, /^(10\.[^.]+)/).replace("_","/"),
 					type: extract(filename, /training\.([^.]+)/)
 				}));
 	
@@ -165,23 +175,71 @@ async function openTrainingFiles() {
 
 			const xmlPath = path.join(GROBID_OUT_DIR,item.model.filename);
 			const tmpXml = path.join(os.tmpdir(), item.model.filename);
+			const corrXml = path.join(GROBID_CORRECTED_DIR, item.model.filename);
 			await wd.download(xmlPath, tmpXml);
-			const xmlTab = vscode.window.showTextDocument(vscode.Uri.file(tmpXml));
+			const xmlTab = await vscode.window.showTextDocument(vscode.Uri.file(tmpXml));
+			vscode.workspace.onDidSaveTextDocument(async doc => {
+				if (doc === xmlTab.document) {
+					await wd.upload(tmpXml, xmlPath);
+					await wd.upload(tmpXml, corrXml);
+					vscode.window.showInformationMessage("Document was uploaded to server.");
+				}
+			});
 			
-			const pdfPath = path.join(GROBID_IN_DIR, item.model.doi.replace("/","_") + ".pdfa.pdf");
+			const pdfPath = path.join(GROBID_IN_DIR, item.model.doi.replace("/","_") + ".pdf");
 			const tmpPdf = path.join(os.tmpdir(), path.basename(pdfPath));
 			await wd.download(pdfPath, tmpPdf);
 			vscode.commands.executeCommand("vscode.openWith", vscode.Uri.file(tmpPdf), "pdf.preview",vscode.ViewColumn.Beside);
 			
 		}
 	} catch (ex) {
-		vscode.window.showErrorMessage(ex);
+		console.error(ex);
+		vscode.window.showErrorMessage(ex.message);
+	}
+}
+
+async function removeLbIndentation() {
+	const editor = vscode.window.activeTextEditor;
+	if (editor) {
+		const document = editor.document;
+		const text = document.getText();
+		const lineCount = document.lineCount;
+		const range = new vscode.Range(0, 0, lineCount, document.lineAt(lineCount-1).text.length);
+		const textEdited = text.replace(/\n\s+<lb \/>/g, "<lb />");
+		editor.edit(editBuilder => {
+			editBuilder.replace(range, textEdited);
+		});
+	}
+}
+
+async function trainModel(model: string) {
+	try {
+		await sshExec(`cp ${GROBID_OUT_PATH}/*.${model}.* ${GROBID_TRAINING_DATA_PATH}`);	
+		await sshExec(`cd ${GROBID_DIR}; ./gradlew train_${model}`);
+	} catch (ex) {
+		console.error(ex);
+		vscode.window.showErrorMessage(ex.message);
+	}
+}
+
+async function selectModelToTrain(model: string) {
+	try {
+		//await sshExec(`cp ${GROBID_OUT_PATH}/*.${model}.* ${GROBID_TRAINING_DATA_PATH}/${}`);	
+		//await sshExec(`cd ${GROBID_DIR}; ./gradlew train_${model}`);
+	} catch (ex) {
+		console.error(ex);
+		vscode.window.showErrorMessage(ex.message);
 	}
 }
 
 export function activate(context: vscode.ExtensionContext) {
-	context.subscriptions.push(vscode.commands.registerCommand('grobid-trainer.createTrainingFiles', createTrainingFiles));
-	context.subscriptions.push(vscode.commands.registerCommand('grobid-trainer.openTrainingFiles', openTrainingFiles));
+	const register = vscode.commands.registerCommand;
+	context.subscriptions.push(
+		register('grobid-trainer.createTrainingFiles', createTrainingFiles),
+		register('grobid-trainer.openTrainingFiles', openTrainingFiles),
+		register('grobid-trainer.selectModelToTrain', selectModelToTrain),
+		register('grobid-trainer.removeLbIndentation', removeLbIndentation),
+	);
 }
 
 // this method is called when your extension is deactivated

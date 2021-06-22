@@ -1,6 +1,8 @@
 import {createClient, WebDAVClient} from 'webdav';
+import { setXattr, removeXattr } from 'node-xattr';
 import * as fs from "fs";
 import * as path from "path";
+import * as os from 'os';
 
 export class WebDav {
 
@@ -21,12 +23,20 @@ export class WebDav {
    * @returns {Promise<void>}
    */
   async download(fileName: string, targetPath:string) : Promise<void> {
-    await new Promise( (resolve, reject) => {
+    console.log(`Downloading ${fileName}`);
+    await new Promise<void>( (resolve, reject) => {
       this.client
         .createReadStream(fileName)
         .on('error', reject)
         .pipe(fs.createWriteStream(targetPath))
-        .on('finish', resolve)
+        .on('finish', async () =>  {
+          try {
+            await removeXattr(targetPath, "com.apple.quarantine");
+          } catch(e) {
+            console.error(e);
+          }
+          resolve();
+        })
         .on('error', reject);
     });
   }
@@ -40,6 +50,7 @@ export class WebDav {
     if (!fileName) {
       fileName = path.basename(sourcePath);
     }
+    console.log(`Uploading ${fileName}`);
     await new Promise( (resolve, reject) => {
       fs.createReadStream(sourcePath)
         .on('error', reject)

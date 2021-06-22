@@ -11,18 +11,28 @@
 	],
 	"activationEvents": [
 		"onCommand:grobid-trainer.openTrainingFiles",
-		"onCommand:grobid-trainer.createTrainingFiles"
+		"onCommand:grobid-trainer.createTrainingFiles",
+		"onCommand:grobid-trainer.selectModelToTrain",
+		"onCommand:grobid-trainer.removeLbIndentation"
 	],
 	"main": "./out/extension.js",
 	"contributes": {
 		"commands": [
 			{
 				"command": "grobid-trainer.createTrainingFiles",
-				"title": "Create GROBID training files from PDF documents"
+				"title": "GROBID: Create training files from PDF documents"
 			},
 			{
 				"command": "grobid-trainer.openTrainingFiles",
-				"title": "Select and edit GROBID training files"
+				"title": "GROBID: Select and edit training files"
+			},
+			{
+				"command": "grobid-trainer.selectModelToTrain",
+				"title": "GROBID: Select model and run training"
+			},
+			{
+				"command": "grobid-trainer.removeLbIndentation",
+				"title": "GROBID: Remove line breaks before <lb />"
 			}
 		]
 	},
@@ -50,7 +60,14 @@
 	},
 	"dependencies": {
 		"dotenv": "^10.0.0",
+		"node-xattr": "^1.3.5",
 		"ssh2": "^1.1.0",
 		"webdav": "^4.6.0"
-	}
+	},
+	"extensionDependencies": [
+		"e-editiones.tei-publisher-vscode",
+		"tomoki1207.pdf",
+		"redhat.vscode-xml"
+	],
+	"publisher": "cboulanger"
 }
