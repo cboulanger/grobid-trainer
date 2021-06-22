@@ -10,10 +10,7 @@
 		"Other"
 	],
 	"activationEvents": [
-		"onCommand:grobid-trainer.openTrainingFiles",
-		"onCommand:grobid-trainer.createTrainingFiles",
-		"onCommand:grobid-trainer.selectModelToTrain",
-		"onCommand:grobid-trainer.removeLbIndentation"
+		"onStartupFinished"
 	],
 	"main": "./out/extension.js",
 	"contributes": {
@@ -34,7 +31,16 @@
 				"command": "grobid-trainer.removeLbIndentation",
 				"title": "GROBID: Remove line breaks before <lb />"
 			}
-		]
+		],
+		"menus": {
+			"editor/context": [
+			  {
+				"when": "resourceExtname == '.xml'",
+				"command": "grobid-trainer.removeLbIndentation",
+				"group": "1_modification"
+			  }
+			]
+		}
 	},
 	"scripts": {
 		"vscode:prepublish": "npm run compile",

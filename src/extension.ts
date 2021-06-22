@@ -177,13 +177,14 @@ async function openTrainingFiles() {
 			const corrXml = path.join(GROBID_CORRECTED_DIR, item.model.filename);
 			await wd.download(xmlPath, tmpXml);
 			const xmlTab = await vscode.window.showTextDocument(vscode.Uri.file(tmpXml));
-			vscode.workspace.onDidSaveTextDocument(async doc => {
+			const saveDoc = async (doc: vscode.TextDocument) => {
 				if (doc === xmlTab.document) {
 					await wd.upload(tmpXml, xmlPath);
 					await wd.upload(tmpXml, corrXml);
 					vscode.window.showInformationMessage("Document was uploaded to server.");
 				}
-			});
+			};
+			vscode.workspace.onDidSaveTextDocument(saveDoc);
 			const pdfPath = path.join(GROBID_IN_DIR, item.model.doi.replace("/","_") + ".pdf");
 			const tmpPdf = path.join(os.tmpdir(), path.basename(pdfPath));
 			await wd.download(pdfPath, tmpPdf);
@@ -229,7 +230,8 @@ async function selectModelToTrain(model: string) {
 	}
 }
 
-export function activate(context: vscode.ExtensionContext) {
+export async function activate(context: vscode.ExtensionContext) {
+	await vscode.commands.executeCommand('workbench.action.closeAllEditors');
 	const register = vscode.commands.registerCommand;
 	context.subscriptions.push(
 		register('grobid-trainer.createTrainingFiles', createTrainingFiles),
@@ -240,4 +242,6 @@ export function activate(context: vscode.ExtensionContext) {
 }
 
 // this method is called when your extension is deactivated
-export function deactivate() {}
+export async function deactivate() {
+	await vscode.commands.executeCommand('workbench.action.closeAllEditors');
+}
