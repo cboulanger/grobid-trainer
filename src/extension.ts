@@ -3,10 +3,11 @@ import * as os from 'os';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as dotenv from 'dotenv';
-
-import {WebDav} from './webdavUtils';
-import {FileStat} from 'webdav';
+import { FileStat } from 'webdav';
 import { Client } from 'ssh2';
+
+import { WebDav } from './webdavUtils';
+import { Tag, teiTags } from './tags';
 
 const { 
 	WEBDAV_URL, WEBDAV_USER, WEBDAV_PASSWD, WEBDAV_DIR,
@@ -210,6 +211,37 @@ async function removeLbIndentation() {
 	}
 }
 
+async function tagSelection() {
+	// create tag list for picker
+	type QpTagModelItem = vscode.QuickPickItem & {model:Tag};
+	const items: QpTagModelItem[] = teiTags.map(model => ({
+		label: `<${model.tag} ${Array.isArray(model.attr) ? model.attr.map(attr => `${attr.name}="${attr.value}"`).join(" "):""}>`,
+		description: model.descr,
+		model
+	}));
+	// show picker
+	const quickPickOptions: vscode.QuickPickOptions = {
+		canPickMany: false
+	};
+	const item = await vscode.window.showQuickPick(items);
+	const editor = vscode.window.activeTextEditor;
+	if (!item || !editor) {
+		return;
+	}
+	const document = editor.document;
+	const selection = editor.selection;
+	const content = document.getText(selection);
+	const contentEdited = item.label + content
+							.replace("<lb />","###lb###")
+							.replace(/<\/?[^>]+>/g,"")
+							.replace("###lb###","<lb />") +
+							`</${item.model.tag}>`;
+
+	editor.edit(editBuilder => {
+		editBuilder.replace(selection, contentEdited);
+	});
+}
+
 async function trainModel(model: string) {
 	try {
 		await sshExec(`cp ${GROBID_OUT_PATH}/*.${model}.* ${GROBID_TRAINING_DATA_PATH}`);	
@@ -238,6 +270,7 @@ export async function activate(context: vscode.ExtensionContext) {
 		register('grobid-trainer.openTrainingFiles', openTrainingFiles),
 		register('grobid-trainer.selectModelToTrain', selectModelToTrain),
 		register('grobid-trainer.removeLbIndentation', removeLbIndentation),
+		register('grobid-trainer.tagSelection', tagSelection),
 	);
 }
 

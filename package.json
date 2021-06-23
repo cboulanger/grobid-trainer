@@ -30,15 +30,24 @@
 			{
 				"command": "grobid-trainer.removeLbIndentation",
 				"title": "GROBID: Remove line breaks before <lb />"
-			}
+			},
+			{
+				"command": "grobid-trainer.tagSelection",
+				"title": "GROBID: Markup selected text"
+			}			
 		],
 		"menus": {
 			"editor/context": [
-			  {
-				"when": "resourceExtname == '.xml'",
-				"command": "grobid-trainer.removeLbIndentation",
-				"group": "1_modification"
-			  }
+				{
+					"command": "grobid-trainer.removeLbIndentation",
+					"group": "1_modification",
+					"when": "resourceExtname == '.xml'"
+				},
+				{
+					"command": "grobid-trainer.tagSelection",
+					"group": "1_modification",
+					"when": "editorHasSelection && resourceExtname == '.xml'"
+				}								
 			]
 		}
 	},
